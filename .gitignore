@@ -1,0 +1,17 @@
+__pycache__/
+.wechaty/
+cross/
+mbti/
+node_modules/
+out/
+tokenizer/
+txt/
+baidu.py
+bert_cross.py
+bert_test.py
+bot.dat
+get-pip.py
+mbti_des.py
+mbti.py
+sans.ttc
+trainie.py
