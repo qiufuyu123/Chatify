@@ -33,7 +33,12 @@ class MBTINode():
     
     def loadmodule(self):
         print('Load Model:',self.model_name,flush=True,end='')
+
         self.module.load_state_dict(torch.load(self.model_name,map_location=torch.device('cpu')))
+        # quantized_model = torch.quantization.quantize_dynamic(
+        # self.module, {torch.nn.Linear}, dtype=torch.qint8
+        # )
+        
         print('[OK]')
     def predict(self,test_input) -> (int,float,float):
         device = torch.device("cpu")
@@ -78,6 +83,7 @@ class MBTIMain():
       self.sn = MBTINode('./out/sn.pt',1)
       self.tf = MBTINode('./out/tf.pt',2)
       self.jp = MBTINode('./out/jp.pt',3)
+      
 
 
   def loadmodule(self):
@@ -112,12 +118,8 @@ class MBTIMain():
     sn,s_v,n_v = self.sn.predict(token)
     tf,t_v,f_v = self.tf.predict(token)
     jp,j_v,p_v = self.jp.predict(token)
-    pct1 = max(i_v,e_v)/(i_v+e_v)
-    pct2 = max(s_v,n_v)/(s_v+n_v)
-    pct3 = max(t_v,f_v)/(t_v+f_v)
-    pct4 = max(j_v,p_v)/(j_v+p_v)
 
-    return (('E' if ie else 'I')+('N' if sn else 'S')+('F' if tf else 'T')+('P' if jp else 'J')),pct1,pct2,pct3,pct4
+    return (('E' if ie else 'I')+('N' if sn else 'S')+('F' if tf else 'T')+('P' if jp else 'J')),0,0,0,0
 
 # node = MBTIMain()
 # print('model init')

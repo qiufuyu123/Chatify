@@ -3,14 +3,15 @@ from typing import Any, Coroutine, List, Optional, Union,Dict
 from wechaty_puppet import EventHeartbeatPayload, EventReadyPayload, MessageType
 from wechaty_puppet import FileBox  # type: ignore
 import time
+from bert_dataset import cute_labels
 from wechaty import Wechaty, Contact
-from wechaty.user import Message, Room
+from wechaty.user import Friendship, Message, Room
 import baidu
 import psutil
 import torch
 from bert_mbti import MBTIMain
 from chatgpt import gpt_35_api_stream
-from threading import Thread
+from threading import Thread,Lock
 predictor = MBTIMain()
 print('==========   BERT * 4   ==========')
 print('start loading models...')
@@ -25,6 +26,8 @@ class UserNode:
         self.timestamp=0
         self.pred =''
         self.recom = ''
+        self.require = ''
+        self.mbti=''
     def set_state(self,s):
         if s == 1:
             self.set_time()
@@ -32,7 +35,10 @@ class UserNode:
         
     def get_state(self):
         return self.state
-    
+    def set_mbti(self,mbti):
+        self.mbti = mbti
+    def get_mbti(self):
+        return self.mbti
     def set_output(self,text):
         self.recom = text
     def process(self):
@@ -67,7 +73,9 @@ class UserNode:
             return '文本内容过少，无法生成推荐回复！请至少转发>3句话的聊天记录'
         for s in self.ctx[len(self.ctx)-3:]:
             last+=s
-        prompts = f'我现在在与一位MBTI属性为{type}的朋友聊天，以下是我们聊天的最后几句话:"{last}",请帮我想出一个比较好的回复'
+        prompts = f'现在你将扮演一个中文互联网的网民，会使用一些网络用于，正在使用微信聊天，善解人意。我现在在与一位MBTI属性为{type}的朋友聊天，以下是我们聊天的最后几句话:"{last}",请帮我想出一个比较好的回复'
+        if self.require != '':
+            prompts+=f',当前语境关键词为：{self.require}'
         state,res= gpt_35_api_stream([{'role': 'user','content': prompts},])
         if not state:
             return 'GPT API 调用失败，无法为您生成推荐回复!'
@@ -86,8 +94,9 @@ use_recommend = True
 if os.path.exists('./bot.dat'):
     admin_usr = torch.load('./bot.dat')
 
+lock = Lock()
 
-
+clear_flag = False
 class MyBot(Wechaty):
     
     async def send_text(self,from_contact,text):
@@ -104,10 +113,16 @@ class MyBot(Wechaty):
     async def on_ready(self, payload: EventReadyPayload) -> Coroutine[Any, Any, None]:
         asyncio.get_running_loop().create_task(process_loop(self))
          
+    async def on_friendship(self, friendship: Friendship) -> Coroutine[Any, Any, None]:
+        
+        await friendship.accept()
+        await friendship.contact().say('嗨～ 欢迎使用Chatify ! \nSTEP 1：向聊天框输入: /start \nSTEP 2: 待ChatiFy Bot回应后，找到想要了解好友的微信，多选聊天记录并逐条转发给ChatiFy, 或复制朋友圈等文案粘贴到聊天框\n STEP 3：发送完成后，向聊天框输入: /stop \nSTEP 4: 静候ChatiFy Bot的回复~')
+    
     async def on_message(self, msg: Message):
         """
         listen for message event
         """
+        global glo_usr
         from_contact: Optional[Contact] = msg.talker()
         to_contact: Optional[Contact] = msg.to()
         
@@ -160,21 +175,30 @@ class MyBot(Wechaty):
                 global use_recommend
                 use_recommend = not use_recommend
                 await self.send_text(from_contact,"建议模式："+('开启'if use_recommend else '关闭')) 
-            
+            elif parts[1] == 'clear':
+                lock.acquire()
+                await self.send_text(from_contact,"获取锁成功！当前人数:"+str(len(glo_usr)))
+                glo_usr={}
+                lock.release() 
         elif text == '/start':
             if from_contact.contact_id in glo_usr:
                 if glo_usr[from_contact.contact_id].get_state()!=10:
-                    await self.send_text(from_contact,"XBreaker:\n用户:"+from_contact.name+"\n[ 已经 ] 输入过/start了，请转发聊天记录或者输入 /stop 来停止")
+                    await self.send_text(from_contact,"Chatify:\n用户:"+from_contact.name+"\n[ 已经 ] 输入过/start了，请转发聊天记录或者输入 /stop 来停止")
                     return
             glo_usr[from_contact.contact_id] = UserNode()
-            await self.send_text(from_contact,"XBreaker:\n用户:"+from_contact.name+"\n文本分析开始!请转发聊天记录(逐条)到此聊天窗口")
-        elif text == '/stop':
+            await self.send_text(from_contact,"Chatify:\n用户:"+from_contact.name+"\n文本分析开始!请转发聊天记录(逐条)到此聊天窗口")
+        elif text.startswith('/stop'):
+            parts = text.split('@')
+            req = ''
+            if len(parts)==2:
+                req = parts[1]
             if from_contact.contact_id in glo_usr:
                 if glo_usr[from_contact.contact_id].get_state()!=0:
-                    await self.send_text(from_contact,"XBreaker:\n文本输入已经停止，请耐心等待服务器分析数据...")
+                    await self.send_text(from_contact,"Chatify:\n文本输入已经停止，请耐心等待服务器分析数据...")
                 else:
+                    glo_usr[from_contact.contact_id].require = req
                     glo_usr[from_contact.contact_id].set_state(1)
-                    # await self.send_text(from_contact,"XBreaker:\n用户:"+from_contact.name+"\n文本获取 停止，接下来将对聊天文本进行分析，请稍等...")
+                    await self.send_text(from_contact,"Chatify:\n用户:"+from_contact.name+"\n文本获取 停止，接下来将对聊天文本进行分析，请稍等...")
                     # state,out = await glo_usr[from_contact.contact_id].process()
                     # if not state:
                     #     await self.send_text(from_contact,"错误！翻译API调用失败!(空的聊天文本？)\n:(\n请尝试输入/start重新开始会话")
@@ -189,34 +213,30 @@ class MyBot(Wechaty):
                     #     await self.send_text(from_contact,"推荐回复:\n"+out)
                     # del glo_usr[from_contact.contact_id]
             else:
-                await self.send_text(from_contact,"XBreaker:\n未获取到聊天文本信息！\n请输入/start开始")
+                await self.send_text(from_contact,"Chatify:\n未获取到聊天文本信息！\n请输入/start开始")
         else:
             if from_contact.contact_id in glo_usr:
                 if glo_usr[from_contact.contact_id].get_state()==0:
                     glo_usr[from_contact.contact_id].add_ctx(text)
-
-
 s=None
 async def process_loop(bot:MyBot):
     global glo_usr,s
     while True:
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(1)
         #print('1',end='')
-        dead = []
         for k,v in glo_usr.items():
             if v.get_state() == 2:
                 glo_usr[k].set_state(10)
-                
+                # if v.get_mbti()!='':
+                p = 'txt/'+cute_labels[v.mbti]+'.png'
                 await bot.send_text(bot.Contact(k),v.get_output())
-                dead.append(k)
+                if os.path.exists(p):
+                    photo = FileBox.from_file(p)
+                    await bot.Contact(k).say(photo)
             elif v.get_state() == 3:
                 glo_usr[k].set_state(10)
                 
                 await bot.send_text(bot.Contact(k),'数据计算失败！')
-                dead.append(k)
-        if len(dead):
-            for s in dead:
-                del glo_usr[s]
             
             
                 
@@ -224,9 +244,10 @@ os.environ['TOKEN'] = "1fe5f846-3cfb-401d-b20c-XXXXX"
 os.environ['WECHATY_PUPPET_SERVICE_ENDPOINT'] = "127.0.0.1:9001"
 bot = MyBot()
 def test():
-    global s
+    global s,dead,lock,glo_usr,bot,lock
     while True:
-        #time.sleep(1)
+        time.sleep(0.1)
+        lock.acquire()
         for k,v in glo_usr.items():
             if v.get_state() == 1:
                 state,out = v.process()
@@ -238,9 +259,11 @@ def test():
                     # photo=FileBox.from_file('mbti/'+out+'.png')
                     # await from_contact.say(photo)
                     rec = v.recommend(out)
-                    glo_usr[k].set_output('你的属性为：'+out+',推荐回复 "'+rec+'"')
+                    
+                    glo_usr[k].set_output('TA的属性为：'+cute_labels[out]+'('+out+')\n推荐回复 '+rec+'')
+                    glo_usr[k].set_mbti(out)
                     glo_usr[k].set_state(2)
-
+        lock.release()
 
 t0 = Thread(target= test,name='process_loop',daemon=True)
 t0.start()

@@ -37,8 +37,3 @@ def gpt_35_api_stream(messages: list):
         return (True,completion['content'])
     except Exception as err:
         return (False, f'OpenAI API 异常: {err}')
-
-if __name__ == '__main__':
-    messages = [{'role': 'user','content': '翻译这句话为英文:我好开心啊！'},]
-    print(gpt_35_api_stream(messages))
-    print(messages)

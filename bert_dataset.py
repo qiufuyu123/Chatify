@@ -3,6 +3,23 @@ import numpy as np
 from transformers import BertTokenizer
 import os
 tokenizer = BertTokenizer.from_pretrained('bert-base-cased')
+cute_labels={'ISTJ':'沉稳（白尾海雕）',
+          'ISFJ':'温和（贝弗伦兔）',
+          'INFJ':'沉稳（白尾海雕）',
+          'INFP':'温和（贝弗伦兔）',
+          'ESTJ':'勇敢（阿穆尔虎）',
+          'ESFJ':'温和（贝弗伦兔）',
+          'ENFJ':'开朗（萨摩耶）',
+          'ENFP':'开朗（萨摩耶）',
+          'ISTP':'感性浪漫（白唇鹿）',
+          'ISFP':'感性浪漫（白唇鹿）',
+          'INTJ':'沉稳（白尾海雕）',
+          'INTP':'沉稳（白尾海雕）',
+          'ESTP':'勇敢（阿穆尔虎）',
+          'ESFP':'开朗（萨摩耶）',
+          'ENTJ':'勇敢（阿穆尔虎）',
+          'ENTP':'沉稳（白尾海雕）'
+          }
 labels = {'ISTJ':[0,0,0,0],
           'ISFJ':[0,0,1,0],
           'INFJ':[0,1,1,0],
